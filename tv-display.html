@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>לוח הפסקות</title>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:     #0a0e17;
+      --card:   #111827;
+      --border: rgba(255,255,255,0.08);
+      --accent: #4B85FF;
+      --text:   #f0f4ff;
+      --muted:  rgba(240,244,255,0.38);
+      --green:  #22c55e;
+      --red:    #ef4444;
+      --yellow: #eab308;
+    }
+
+    html, body {
+      font-family: 'Heebo', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      width: 100vw; height: 100vh;
+      overflow: hidden;
+      font-size: 13px; /* base — כל שאר המידות יחסיות לזה */
+    }
+
+    /* ── FULLSCREEN BUTTON ── */
+    #fs-btn {
+      position: fixed; top: 6px; inset-inline-end: 6px; z-index: 999;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: #fff; border-radius: 4px;
+      padding: 3px 8px;
+      font-family: 'Heebo', sans-serif; font-size: 11px; font-weight: 700;
+      cursor: pointer; transition: opacity 0.3s;
+    }
+    #fs-btn:hover { background: rgba(255,255,255,0.14); }
+    body.is-fullscreen #fs-btn { opacity: 0; }
+    body.is-fullscreen #fs-btn:hover { opacity: 1; }
+
+    /* ── SCREEN ── */
+    .screen {
+      display: flex; flex-direction: column;
+      height: 100vh;
+      padding: 6px 8px 5px;
+      gap: 5px;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0; gap: 6px;
+    }
+    .header-left { display: flex; align-items: center; gap: 6px; }
+    .live-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--green); box-shadow: 0 0 6px var(--green);
+      animation: pulse 2s infinite; flex-shrink: 0;
+    }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
+    .header-title { font-size: 12px; font-weight: 900; white-space: nowrap; letter-spacing: -0.01em; }
+    .header-title span { color: var(--accent); }
+    .clock { font-size: 18px; font-weight: 900; letter-spacing: 0.04em; font-feature-settings:"tnum"; direction:ltr; }
+    .sync-badge {
+      font-size: 10px; font-weight: 700;
+      padding: 2px 7px; border-radius: 10px;
+      background: rgba(34,197,94,0.12); color: var(--green);
+      border: 1px solid rgba(34,197,94,0.22); white-space: nowrap;
+    }
+    .sync-badge.error   { background:rgba(239,68,68,0.12);  color:var(--red);    border-color:rgba(239,68,68,0.22); }
+    .sync-badge.loading { background:rgba(234,179,8,0.12);  color:var(--yellow); border-color:rgba(234,179,8,0.22); }
+
+    /* ── SHIFTS ── */
+    .shifts { flex:1; display:flex; flex-direction:column; gap:5px; overflow:hidden; min-height:0; }
+    .shift-block { flex:1; display:flex; flex-direction:column; gap:4px; min-height:0; }
+    .shift-label {
+      font-size: 9px; font-weight: 800; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--muted);
+      border-inline-start: 2px solid var(--accent);
+      padding-inline-start: 5px; flex-shrink: 0;
+    }
+    .slots-row { display:grid; gap:5px; flex:1; min-height:0; }
+    #grid-morning   { grid-template-columns: repeat(4,1fr); }
+    #grid-afternoon { grid-template-columns: repeat(2,1fr); }
+
+    /* ── SLOT CARD ── */
+    .slot-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 6px 7px 5px;
+      display: flex; flex-direction: column;
+      gap: 3px; overflow: hidden; position: relative;
+    }
+    .slot-card::before {
+      content:''; position:absolute;
+      top:0; inset-inline-start:0;
+      width:2px; height:100%; background:var(--accent);
+    }
+    .slot-card.active  { background:#0a1a0f; border-color:rgba(34,197,94,0.22); }
+    .slot-card.active::before { background:var(--green); box-shadow:0 0 6px var(--green); }
+    .slot-card.full::before   { background:var(--red); }
+
+    /* top row */
+    .slot-top { display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+    .slot-time { font-size: 11px; font-weight:900; color:var(--accent); direction:ltr; line-height:1; }
+    .slot-card.active .slot-time { color:var(--green); }
+    .slot-badge { font-size:9px; font-weight:800; padding:1px 5px; border-radius:6px; white-space:nowrap; }
+    .badge-active { background:rgba(34,197,94,0.15);  color:var(--green); }
+    .badge-open   { background:rgba(75,133,255,0.12); color:var(--accent); }
+    .badge-full   { background:rgba(239,68,68,0.12);  color:var(--red); }
+    .badge-done   { background:rgba(255,255,255,0.05);color:var(--muted); }
+
+    /* pips */
+    .cap-bar { display:flex; gap:2px; flex-shrink:0; }
+    .pip { height:2px; flex:1; border-radius:1px; background:rgba(255,255,255,0.1); transition:background 0.4s; }
+    .pip.on { background:var(--accent); }
+    .slot-card.active .pip.on { background:var(--green); }
+    .slot-card.full   .pip.on { background:var(--red); }
+
+    /* agents */
+    .agents { flex:1; display:flex; flex-direction:column; gap:2px; min-height:0; overflow:hidden; }
+    .agent-row {
+      display:flex; align-items:center; gap:4px;
+      font-size: 11px; font-weight:700;
+      background:rgba(255,255,255,0.04);
+      border-radius:4px;
+      padding: 2px 6px;
+      flex-shrink:0; overflow:hidden;
+      white-space:nowrap;
+    }
+    .agent-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(2px)} to{opacity:1;transform:none} }
+    .agent-dot { width:5px; height:5px; border-radius:50%; background:var(--accent); flex-shrink:0; }
+    .slot-card.active .agent-dot { background:var(--green); }
+    .agent-empty {
+      flex:1; display:flex; align-items:center; justify-content:center;
+      font-size:10px; color:var(--muted);
+      border:1px dashed rgba(255,255,255,0.07); border-radius:4px;
+    }
+
+    /* ── FOOTER ── */
+    .footer {
+      flex-shrink:0; display:flex; align-items:center; justify-content:space-between;
+      font-size:9px; color:var(--muted); font-weight:700;
+      border-top:1px solid var(--border); padding-top:4px;
+    }
+    .legend { display:flex; gap:10px; }
+    .legend-item { display:flex; align-items:center; gap:3px; }
+    .legend-dot { width:5px; height:5px; border-radius:50%; }
+  </style>
+</head>
+<body>
+
+<button id="fs-btn" onclick="toggleFS()">⛶ מסך מלא</button>
+
+<div class="screen">
+  <div class="header">
+    <div class="header-left">
+      <div class="live-dot"></div>
+      <div class="header-title">לוח <span>הפסקות</span> צהריים</div>
+    </div>
+    <div class="clock" id="clock">--:--:--</div>
+    <div id="sync-badge" class="sync-badge loading">⟳ מתחבר...</div>
+  </div>
+
+  <div class="shifts">
+    <div class="shift-block">
+      <div class="shift-label">משמרת בוקר</div>
+      <div class="slots-row" id="grid-morning"></div>
+    </div>
+    <div class="shift-block">
+      <div class="shift-label">משמרת ערב</div>
+      <div class="slots-row" id="grid-afternoon"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="legend">
+      <span class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>פעיל עכשיו</span>
+      <span class="legend-item"><span class="legend-dot" style="background:var(--accent)"></span>פתוח</span>
+      <span class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>מלא</span>
+      <span class="legend-item"><span class="legend-dot" style="background:rgba(255,255,255,0.2)"></span>הסתיים</span>
+    </div>
+    <div id="last-update"></div>
+  </div>
+</div>
+
+<script>
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzmw1tH2JhO0Y-sx490M9ZEek6IEjsLhPz-MWyvDYZ2Ejiv4aNDnRZvwEJgthMPjeDd3w/exec';
+const SLOTS = [
+  { id:'A', time:'11:50–12:30', max:3, shift:'morning'   },
+  { id:'B', time:'12:40–13:20', max:3, shift:'morning'   },
+  { id:'C', time:'13:30–14:10', max:3, shift:'morning'   },
+  { id:'D', time:'14:10–14:50', max:3, shift:'morning'   },
+  { id:'E', time:'15:00–15:40', max:1, shift:'afternoon' },
+  { id:'F', time:'16:00–16:40', max:1, shift:'afternoon' },
+];
+let state = {};
+
+/* Clock */
+function updateClock() {
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    [n.getHours(),n.getMinutes(),n.getSeconds()].map(x=>String(x).padStart(2,'0')).join(':');
+}
+setInterval(updateClock, 1000); updateClock();
+
+/* Slot status */
+function toMin(t) { const [h,m]=t.split(':').map(Number); return h*60+m; }
+function slotStatus(time) {
+  const now = new Date(), cur = now.getHours()*60+now.getMinutes();
+  const [s,e] = time.split('–');
+  const start=toMin(s), end=toMin(e);
+  if (cur>=start && cur<end) return 'active';
+  if (cur<start)             return 'open';
+  return 'done';
+}
+
+/* Render */
+function render() {
+  ['morning','afternoon'].forEach(shift => {
+    const grid = document.getElementById('grid-'+shift);
+    grid.innerHTML = '';
+    SLOTS.filter(s=>s.shift===shift).forEach(sl => {
+      const agents = state[sl.id]||[];
+      const isFull = agents.length >= sl.max;
+      const status = slotStatus(sl.time);
+
+      const card = document.createElement('div');
+      card.className = 'slot-card'+(status==='active'?' active':'')+(isFull?' full':'');
+
+      /* top */
+      const top = document.createElement('div');
+      top.className = 'slot-top';
+      const timeEl = document.createElement('div');
+      timeEl.className = 'slot-time';
+      timeEl.innerHTML = `<bdi>${sl.time}</bdi>`;
+      const badge = document.createElement('span');
+      badge.className = 'slot-badge ';
+      if      (status==='active')     { badge.className+='badge-active'; badge.textContent='● פעיל'; }
+      else if (status==='done')       { badge.className+='badge-done';   badge.textContent='הסתיים'; }
+      else if (isFull)                { badge.className+='badge-full';   badge.textContent='מלא'; }
+      else { badge.className+='badge-open'; badge.textContent=`${sl.max-agents.length} פנוי`; }
+      top.appendChild(timeEl); top.appendChild(badge);
+      card.appendChild(top);
+
+      /* pips */
+      const bar = document.createElement('div');
+      bar.className = 'cap-bar';
+      for(let i=0;i<sl.max;i++){
+        const p=document.createElement('div');
+        p.className='pip'+(i<agents.length?' on':'');
+        bar.appendChild(p);
+      }
+      card.appendChild(bar);
+
+      /* agents */
+      const area = document.createElement('div');
+      area.className = 'agents';
+      if (!agents.length) {
+        const e=document.createElement('div');
+        e.className='agent-empty';
+        e.textContent = status==='done' ? '—' : 'אין רשומים';
+        area.appendChild(e);
+      } else {
+        agents.forEach(name=>{
+          const r=document.createElement('div');
+          r.className='agent-row';
+          const dot=document.createElement('span');
+          dot.className='agent-dot';
+          const nm=document.createElement('span');
+          nm.className='agent-name';
+          nm.textContent=name;
+          r.appendChild(dot);
+          r.appendChild(nm);
+          area.appendChild(r);
+        });
+        /* empty slots */
+        for(let i=agents.length;i<sl.max;i++){
+          const r=document.createElement('div');
+          r.className='agent-row';
+          r.style.cssText='opacity:0.25;font-weight:400;font-size:0.85em;';
+          r.textContent='פנוי';
+          area.appendChild(r);
+        }
+      }
+      card.appendChild(area);
+      grid.appendChild(card);
+    });
+  });
+}
+
+/* Fetch */
+async function fetchState() {
+  const badge = document.getElementById('sync-badge');
+  try {
+    badge.className='sync-badge loading'; badge.textContent='⟳';
+    const res  = await fetch(SCRIPT_URL+'?t='+Date.now(),{cache:'no-store'});
+    const data = await res.json();
+    if(data.ok){
+      state=data.state; render();
+      badge.className='sync-badge'; badge.textContent='✓ מעודכן';
+      const n=new Date();
+      document.getElementById('last-update').textContent=
+        'עדכון: '+[n.getHours(),n.getMinutes(),n.getSeconds()].map(x=>String(x).padStart(2,'0')).join(':');
+    } else { badge.className='sync-badge error'; badge.textContent='✗ שגיאה'; }
+  } catch(e) { badge.className='sync-badge error'; badge.textContent='✗ אין חיבור'; }
+}
+
+/* Fullscreen */
+function toggleFS() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().then(()=>{
+      document.body.classList.add('is-fullscreen');
+    }).catch(()=>{});
+  } else {
+    document.exitFullscreen().then(()=>{
+      document.body.classList.remove('is-fullscreen');
+    }).catch(()=>{});
+  }
+}
+document.addEventListener('fullscreenchange', ()=>{
+  document.body.classList.toggle('is-fullscreen', !!document.fullscreenElement);
+});
+
+/* Auto fullscreen on load (requires user gesture — triggered on first click if blocked) */
+window.addEventListener('load', () => {
+  document.documentElement.requestFullscreen().catch(()=>{
+    // Blocked by browser — user will see the button
+  });
+});
+
+fetchState();
+setInterval(fetchState, 10000);
+setInterval(render, 30000);
+</script>
+</body>
+</html>
